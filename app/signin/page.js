@@ -115,7 +115,7 @@ export default function Page() {
             });
 
             // alert("Signed up successfully with Google!");
-            // window.location.href = "/dashboard"; // ✅ redirect directly 
+            window.location.href = "/job-descriptions"; // ✅ redirect directly 
         } catch (err) {
             console.error(err);
             setError(err.message || "Failed to sign up with Google");
