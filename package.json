@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "axios": "^1.11.0",
     "firebase": "^12.2.1",
     "firebase-admin": "^13.5.0",
     "force": "^0.0.3",
