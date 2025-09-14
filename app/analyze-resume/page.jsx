@@ -5,6 +5,8 @@ import axios from "axios"
 import { ArrowLeft, ArrowRight, Notebook, FileText, Search, Plus, ChevronLeft, ChevronRight, Upload, X } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import ResumeResults from "@/_components/resume-results";
+import { toast } from 'react-toastify';
+
 
 const page = () => {
 
@@ -181,6 +183,9 @@ const page = () => {
     const currentStage = getStage(percentage);
 
     useEffect(() => {
+        toast.success("Welcome to dashboard", { position: "top-right", autoClose: 2000 });
+        toast("Welcome to dashboard")
+        toast("Welcome to dashboard")
         getallJobDescription();
     }, []);
 
@@ -188,6 +193,7 @@ const page = () => {
     return (
         <div className="w-container h-full w-full max-w-screen h-max-screen flex overflow-hidden text-sm bg-white text-black">
             <Sidebar />
+
             <div className="flex flex-1 flex-col overflow-hidden">
                 <Navbar className="px-6" />
                 <div className="relative h-full overflow-hidden">

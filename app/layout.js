@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/_components/navbar";
+import { ToastContainer, toast, Slide } from 'react-toastify';
 import Sidebar from "@/_components/sidebar";
 
 const geistSans = Geist({
@@ -25,6 +26,7 @@ export default function RootLayout({ children }) {
         className={`${geistSans.variable} ${geistMono.variable} antialiased  `}
       >
         {children}
+        <ToastContainer hideProgressBar={true} transition={Slide} position="top-right" autoClose={2000} />
       </body>
     </html>
   );

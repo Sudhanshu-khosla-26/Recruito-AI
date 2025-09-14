@@ -1,35 +1,178 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Sidebar from "@/_components/sidebar"
 import Navbar from "@/_components/navbar"
 import CandidatesTable from "./components/CandidatesTable"
 import InterviewQuestions from "./components/InterviewQuestions"
 import InterviewSuccess from "./components/InterviewSuccess"
 import { ChevronUp, X, ArrowRight } from "lucide-react"
+import axios from "axios"
 
 const Dashboard = () => {
     const [currentView, setCurrentView] = useState("candidates")
     const [showModal, setShowModal] = useState(false)
+    const [selectedCandidate, setSelectedCandidate] = useState(null)
+    const [candidates, setCandidates] = useState([])
+    const [selectedDuration, setSelectedDuration] = useState("10 Min")
+    const [selectedTypes, setSelectedTypes] = useState(["Behavioural"])
+    const [customType, setCustomType] = useState("")
+    const [Questions, setQuestions] = useState([])
+    const [interviewID, setInterviewID] = useState("")
+
+    console.log(selectedCandidate, "selected ");
 
     const renderContent = () => {
         switch (currentView) {
             case "candidates":
-                return <CandidatesTable onScheduleInterview={() => setShowModal(true)} />
+                return <CandidatesTable setSelectedCandidate={setSelectedCandidate} candidates={candidates} onScheduleInterview={() => setShowModal(true)} />
             case "questions":
-                return <InterviewQuestions onGenerateSuccess={() => setCurrentView("success")} />
+                return <InterviewQuestions Questions={Questions} setQuestions={setQuestions} onGenerateSuccess={() => { saveQuestions() }} />
             case "success":
-                return <InterviewSuccess onBackToCandidates={() => setCurrentView("candidates")} />
+                return <InterviewSuccess sendMail={sendMail} interviewID={interviewID} onBackToCandidates={() => setCurrentView("candidates")} />
             default:
                 return <CandidatesTable onScheduleInterview={() => setShowModal(true)} />
         }
     }
+
+
+    const sendMail = async () => {
+        try {
+
+            const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>Interview Scheduled</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 0;">
+          <table align="center" width="600" style="background: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+            <tr>
+              <td style="background: #4f46e5; padding: 20px; text-align: center; color: white; font-size: 24px; font-weight: bold;">
+                Recruito AI
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 30px; color: #333;">
+                <h2 style="color: #111; margin-bottom: 10px;">Interview Scheduled 🎉</h2>
+                <p style="font-size: 16px; line-height: 1.5;">
+                  Dear Candidate,<br/><br/>
+                  We are pleased to inform you that your interview has been <b>successfully scheduled</b>.
+                </p>
+                <p style="font-size: 16px; line-height: 1.5;">
+                  Please make sure you are available at the scheduled time. If you need to reschedule, contact our support team.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="http://localhost:3000/interviews/${interviewID}" style="background: #4f46e5; color: white; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; font-weight: bold;">
+                    View Interview Details
+                  </a>
+                </div>
+                <p style="font-size: 14px; color: #666; text-align: center;">
+                  © ${new Date().getFullYear()} Recruito AI. All rights reserved.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+            const res = await axios.post("/api/Notification/Email", {
+                to: selectedCandidate.candidate.applicant_email,
+                subject: "Interview Scheduled",
+                text: "Your interview is scheduled for tomorrow",
+                html: htmlContent,
+            });
+            console.log(res.data);
+        } catch (err) {
+            console.error("Error sending mail:", err.response?.data || err);
+        }
+    };
+
+
+    const createInterview = async () => {
+        try {
+            const response = await axios.post("/api/Interviews/Create", {
+                job_id: selectedCandidate.job_id,
+                application_id: selectedCandidate.application_id,
+                mode: "Wai",
+                interview_type: selectedTypes,
+                duration_minutes: selectedDuration
+
+            })
+            console.log("Interview Created:", response.data);
+            setInterviewID(response.data.id)
+
+            generateQuestions();
+
+        } catch (error) {
+            console.log("Error creating interview:", error);
+        }
+    }
+
+    const getCandidates = async () => {
+        try {
+            const response = await axios.get("/api/job/get-all-candidates");
+
+            console.log("✅ API Response:", response.data);
+
+            if (response.data.candidates) {
+                console.log("Candidates:", response.data.candidates);
+                setCandidates(response.data.candidates);
+            } else {
+                console.warn("No candidates found in response");
+            }
+        } catch (error) {
+            console.error("❌ Error fetching candidates:", error.response?.data || error.message);
+        }
+    };
+
+    const generateQuestions = async () => {
+        try {
+            const response = await axios.post("/api/Interviews/questions/generate-questions-ai", {
+                interview_type: selectedTypes,
+                duration_minutes: selectedDuration,
+                job_id: selectedCandidate.job_id
+            });
+            console.log("Generated Questions:", response.data.data.questions);
+            setQuestions(response.data.data.questions)
+            setCurrentView("questions")
+        } catch (error) {
+            console.log(error);
+        }
+    }
+
+    const saveQuestions = async () => {
+        try {
+
+            for (const [categoryKey, categoryQuestions] of Object.entries(Questions)) {
+
+                for (const questionData of categoryQuestions) {
+                    await axios.post("/api/Interviews/questions/save-questions", {
+                        interviewId: interviewID,
+                        question: questionData,
+                        question_type: categoryKey
+                    });
+                }
+            }
+            console.log("All questions saved successfully");
+            setCurrentView("success")
+        } catch (error) {
+            console.error("Error saving questions:", error);
+        }
+    }
+
+
+    useEffect(() => {
+        getCandidates()
+    }, [])
+
 
     return (
         <div className="flex h-screen bg-gray-50">
             <Sidebar currentView={currentView} onViewChange={setCurrentView} />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <Navbar />
-                <main className="flex-1 overflow-auto p-6">{renderContent()}</main>
+                <main className="flex-1 overflow-auto p-0">{renderContent()}</main>
             </div>
 
             {showModal && (
@@ -37,18 +180,25 @@ const Dashboard = () => {
                     onClose={() => setShowModal(false)}
                     onSchedule={() => {
                         setShowModal(false)
-                        setCurrentView("questions")
+                        createInterview();
+
                     }}
+                    setSelectedTypes={setSelectedTypes}
+                    customType={customType}
+                    selectedTypes={selectedTypes}
+                    setCustomType={setCustomType}
+                    setSelectedDuration={setSelectedDuration}
+                    selectedDuration={selectedDuration}
                 />
             )}
         </div>
     )
 }
 
-const ScheduleModal = ({ onClose, onSchedule }) => {
-    const [selectedDuration, setSelectedDuration] = useState("10 Min")
-    const [selectedTypes, setSelectedTypes] = useState(["Behavioural"])
-    const [customType, setCustomType] = useState("")
+const ScheduleModal = ({ onClose, onSchedule, setSelectedTypes, customType, selectedTypes, setCustomType, setSelectedDuration, selectedDuration }) => {
+
+
+    console.log(selectedDuration, selectedTypes);
 
     const durations = ["5 Min", "10 Min", "15 Min", "20 Min", "30 Min"]
     const [types, setTypes] = useState(["Behavioural", "Leadership", "Technical", "Analytical", "Experience"])
@@ -92,7 +242,10 @@ const ScheduleModal = ({ onClose, onSchedule }) => {
                                 {durations.map((duration) => (
                                     <button
                                         key={duration}
-                                        onClick={() => setSelectedDuration(duration)}
+                                        onClick={() => {
+                                            console.log(duration)
+                                            setSelectedDuration(duration)
+                                        }}
                                         className={`w-28 text-left text-sm px-4 border-2 rounded-xl transition-all ${selectedDuration === duration
                                             ? "text-blue-500 flex items-center   font-bold  border-gray-500"
                                             : " hover:bg-gray-200 border-transparent text-gray-700"

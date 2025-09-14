@@ -9,8 +9,8 @@ export async function PATCH(request) {
         const { interviewId } = await request.json();
 
         const payload = {
-            ended_at: FieldValue.serverTimestamp(),
-            status: "completed",
+            started_at: FieldValue.serverTimestamp(),
+            status: "in_progress",
         }
 
         const interviewRef = adminDB.collection("interviews").doc(interviewId);

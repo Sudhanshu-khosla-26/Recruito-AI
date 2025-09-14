@@ -2,9 +2,9 @@
 import { useState } from "react"
 import { Check, Copy, Share, Calendar } from "lucide-react"
 
-const InterviewSuccess = ({ onBackToCandidates }) => {
+const InterviewSuccess = ({ onBackToCandidates, interviewID, sendMail }) => {
     const [copied, setCopied] = useState(false)
-    const interviewLink = "url/interview/interview_ID"
+    const interviewLink = `http://localhost:3000/interviews/${interviewID}`
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(interviewLink)
@@ -12,8 +12,10 @@ const InterviewSuccess = ({ onBackToCandidates }) => {
         setTimeout(() => setCopied(false), 2000)
     }
 
+
+
     return (
-        <div className="w-full animate-fadeIn">
+        <div className="w-full animate-fadeIn p-6 py-0">
             <div className="">
                 <h2 className="text-lg font-bold text-orange-500 mb-2">Generate Interview Questions</h2>
 
@@ -41,7 +43,7 @@ const InterviewSuccess = ({ onBackToCandidates }) => {
 
                 <p className="text-gray-600 text-center mb-2">Share the link with Candidate and proceed for interview with AI.</p>
 
-                <div className="bg-red-500/60 rounded-full p-6 animate-slideInUp" style={{ animationDelay: "300ms" }}>
+                <div className="bg-red-500/60 w-[90%] mx-auto rounded-full p-6 animate-slideInUp" style={{ animationDelay: "300ms" }}>
                     <div className="flex items-center justify-between  rounded-lg ">
                         <span className="text-gray-700 font-mono px-4 bg-white w-5/6 rounded-full py-1 ">{interviewLink}</span>
                         <button
@@ -72,7 +74,7 @@ const InterviewSuccess = ({ onBackToCandidates }) => {
                 >
                     Back to Candidates
                 </button>
-                <button className="px-8 py-2 cursor-pointer bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-all transform hover:scale-105 flex items-center space-x-2">
+                <button onClick={sendMail} className="px-8 py-2 cursor-pointer bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-all transform hover:scale-105 flex items-center space-x-2">
                     <Share className="h-4 w-4" />
                     <span>Share</span>
                 </button>
