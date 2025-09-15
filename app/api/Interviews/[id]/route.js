@@ -4,7 +4,7 @@ import { adminDB } from "@/lib/firebase-admin";
 export async function GET(request, { params }) {
     try {
         // ✅ Extract id from dynamic route
-        const { id } = params;
+        const { id } = await params;
 
         if (!id) {
             return NextResponse.json(

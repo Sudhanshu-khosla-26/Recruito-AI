@@ -1,17 +1,15 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/_components/navbar";
-import { ToastContainer, toast, Slide } from 'react-toastify';
-import Sidebar from "@/_components/sidebar";
+import { ToastContainer, Slide } from "react-toastify";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-sans",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const robotoMono = Roboto_Mono({
   subsets: ["latin"],
+  variable: "--font-mono",
 });
 
 export const metadata = {
@@ -23,10 +21,15 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased  `}
+        className={`${inter.variable} ${robotoMono.variable} antialiased`}
       >
         {children}
-        <ToastContainer hideProgressBar={true} transition={Slide} position="top-right" autoClose={2000} />
+        <ToastContainer
+          hideProgressBar
+          transition={Slide}
+          position="top-right"
+          autoClose={2000}
+        />
       </body>
     </html>
   );

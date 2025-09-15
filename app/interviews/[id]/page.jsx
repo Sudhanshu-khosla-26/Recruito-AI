@@ -14,6 +14,7 @@ import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import axios from "axios";
 
+// Environment variable for Vapi key
 const VAPI_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPIAI_API_KEY;
 
 function Avatar({ stream }) {
@@ -31,18 +32,11 @@ function Avatar({ stream }) {
         if (!stream) return;
 
         const listener = new THREE.AudioListener();
-        const temp = new THREE.Camera();
-        temp.add(listener);
-
         const audio = new THREE.Audio(listener);
-        const ctx = (listener.context || listener).audioContext || listener.context;
-        const audioContext = ctx || new (window.AudioContext || window.webkitAudioContext)();
+        const audioContext = listener.context || new (window.AudioContext || window.webkitAudioContext)();
 
         const source = audioContext.createMediaStreamSource(stream);
-        audio.setNodeSource?.(source);
-        if (!audio.getOutput && audio.setMediaStreamSource) {
-            audio.setMediaStreamSource(stream);
-        }
+        audio.setMediaStreamSource(stream);
 
         const analyser = new THREE.AudioAnalyser(audio, 64);
         analyserRef.current = analyser;
@@ -51,20 +45,12 @@ function Avatar({ stream }) {
             analyserRef.current = null;
             try {
                 source.disconnect();
-            } catch (e) {
-                console.warn("Error disconnecting source:", e);
-            }
-            try {
                 audio?.disconnect?.();
-            } catch (e) {
-                console.warn("Error disconnecting audio:", e);
-            }
-            try {
                 if (audioContext.state === "running") {
                     audioContext.close();
                 }
             } catch (e) {
-                console.warn("Error closing audio context:", e);
+                console.warn("Error cleaning up audio:", e);
             }
         };
     }, [stream]);
@@ -89,23 +75,18 @@ function Avatar({ stream }) {
         const influences = mesh.morphTargetInfluences;
         if (!dict || !influences) return;
 
-        // Lipsync from analyser
+        // Lipsync
         let volume = 0;
         if (analyserRef.current) {
             volume = analyserRef.current.getAverageFrequency() / 200;
             smoothVolume.current += (volume - smoothVolume.current) * 0.3;
-
-            // Reset morphs
-            if (dict["jawOpen"] !== undefined) influences[dict["jawOpen"]] = 0;
-            if (dict["eyeBlinkLeft"] !== undefined) influences[dict["eyeBlinkLeft"]] = 0;
-            if (dict["eyeBlinkRight"] !== undefined) influences[dict["eyeBlinkRight"]] = 0;
 
             if (dict["jawOpen"] !== undefined) {
                 influences[dict["jawOpen"]] = volume > 0.05 ? Math.min(smoothVolume.current, 1) : 0;
             }
         }
 
-        // Natural blinking
+        // Blinking
         blinkTimer.current -= delta;
         if (blinkTimer.current <= 0 && dict) {
             if (dict["eyeBlinkLeft"] !== undefined && dict["eyeBlinkRight"] !== undefined) {
@@ -147,222 +128,26 @@ export default function Page() {
     const [questions, setQuestions] = useState([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [interviewInfo, setInterviewInfo] = useState(null);
-    const [answer, setAnswer] = useState("");
     const [log, setLog] = useState([]);
-    const [score, setScore] = useState(null);
     const [vapiStatus, setVapiStatus] = useState("idle");
     const [remoteStream, setRemoteStream] = useState(null);
     const [user, setUser] = useState(null);
-    const [isInterviewStarted, setIsInterviewStarted] = useState(false);
-
-    // Enhanced state for conversation tracking
-    const [conversationHistory, setConversationHistory] = useState([]);
-    const [currentScore, setCurrentScore] = useState(null);
-    const [currentFeedback, setCurrentFeedback] = useState("");
-    const [silenceTimer, setSilenceTimer] = useState(null);
-    const [interviewStartTime, setInterviewStartTime] = useState(null);
-    const [interviewDuration, setInterviewDuration] = useState(null);
+    const [conversationLog, setConversationLog] = useState([]);
 
     const { id: interviewId } = useParams();
     const vapiRef = useRef(null);
-    const startedRef = useRef(false);
-    const lastUserSpeechTime = useRef(null);
-    const questionAskedTime = useRef(null);
-    const isWaitingForAnswer = useRef(false);
+    const hasStarted = useRef(false);
 
     // Get current question
     const currentQuestion = questions[currentQuestionIndex] || null;
 
-    // Enhanced scoring system
-    const calculateScore = (answer, question) => {
-        // Basic scoring logic - you can enhance this
-        const answerLength = answer.trim().length;
-        const hasKeywords = question.toLowerCase().includes('experience') ||
-            question.toLowerCase().includes('strength') ||
-            question.toLowerCase().includes('weakness');
 
-        let baseScore = 0;
-
-        if (answerLength < 50) baseScore = 30; // Too short
-        else if (answerLength < 100) baseScore = 50; // Minimal
-        else if (answerLength < 200) baseScore = 70; // Good
-        else if (answerLength < 400) baseScore = 85; // Very good
-        else baseScore = 90; // Excellent
-
-        // Adjust based on relevance (simplified)
-        if (hasKeywords && answerLength > 100) baseScore += 10;
-
-        return Math.min(100, Math.max(0, baseScore + Math.random() * 10 - 5));
-    };
-
-    // Enhanced feedback generation
-    const generateFeedback = (answer, question, score) => {
-        const answerLength = answer.trim().length;
-        let feedback = "";
-
-        if (score >= 80) {
-            feedback = "Excellent response! You provided comprehensive details and showed good understanding.";
-        } else if (score >= 60) {
-            feedback = "Good answer. Consider adding more specific examples or details to strengthen your response.";
-        } else if (score >= 40) {
-            feedback = "Your answer covers the basics. Try to elaborate more and provide concrete examples.";
-        } else {
-            feedback = "Your response needs more depth. Consider providing specific examples and more detailed explanations.";
-        }
-
-        return feedback;
-    };
-
-    // Save conversation to database
-    const saveConversationToDB = useCallback(async (conversationData) => {
-        try {
-            // await axios.post('/api/interviews/conversation', {
-            //     interviewId,
-            //     conversation: conversationData,
-            //     timestamp: new Date().toISOString()
-            // });
-
-            console.log("Conversation saved:", conversationData);
-        } catch (error) {
-            console.error('Error saving conversation:', error);
-        }
-    }, [interviewId]);
-
-    // Auto-advance to next question
-    const moveToNextQuestion = useCallback(async () => {
-        if (currentQuestionIndex < questions.length - 1) {
-            setCurrentQuestionIndex(prev => prev + 1);
-            setAnswer("");
-            isWaitingForAnswer.current = false;
-
-            // Small delay before asking next question
-            setTimeout(() => {
-                if (vapiRef.current) {
-                    const nextQuestion = questions[currentQuestionIndex + 1];
-                    vapiRef.current.send({
-                        type: "response.create",
-                        response: {
-                            instructions: `Now let's move to the next question: ${nextQuestion.question_text.question}. Please take your time to think about your answer.`
-                        },
-                    });
-                    questionAskedTime.current = Date.now();
-                    isWaitingForAnswer.current = true;
-                }
-            }, 2000);
-        } else {
-            // End interview
-            if (vapiRef.current) {
-                vapiRef.current.send({
-                    type: "response.create",
-                    response: {
-                        instructions: "Thank you for completing the interview! We've covered all the questions. The interview will now conclude. You did great, and we'll be in touch with the results soon."
-                    },
-                });
-            }
-            setTimeout(() => endInterview(), 5000);
-        }
-    }, [currentQuestionIndex, questions]);
-
-    // Handle answer submission and auto-advance
-    const processAnswer = useCallback(async (answerText) => {
-        if (!currentQuestion || !answerText.trim()) return;
-
-        const score = calculateScore(answerText, currentQuestion.question_text.question);
-        const feedback = generateFeedback(answerText, currentQuestion.question_text.question, score);
-
-        console.log("Answer processed:", { answerText, score, feedback });
-
-        setCurrentScore(score);
-        setCurrentFeedback(feedback);
-
-        // Update conversation history
-        const newConversationEntry = {
-            questionIndex: currentQuestionIndex,
-            question: currentQuestion.question_text.question,
-            answer: answerText,
-            score: score,
-            feedback: feedback,
-            timestamp: new Date().toISOString()
-        };
-
-        setConversationHistory(prev => [...prev, newConversationEntry]);
-
-        // Save to database
-        // try {
-        //     await apiAnswer(currentQuestion.id, currentQuestion.question_text.question, answerText);
-        // } catch (error) {
-        //     console.error('Error saving answer:', error);
-        // }
-
-        // Provide feedback through Vapi
-        if (vapiRef.current) {
-            vapiRef.current.send({
-                type: "response.create",
-                response: {
-                    instructions: `Thank you for your answer. ${feedback} Your score for this question is ${Math.round(score)} out of 100.`
-                },
-            });
-        }
-
-        // Auto-advance after feedback
-        setTimeout(() => {
-            moveToNextQuestion();
-        }, 2000);
-
-    }, [currentQuestion, currentQuestionIndex, moveToNextQuestion]);
-
-    // Handle silence and encourage response
-    useEffect(() => {
-        let silenceTimeout;
-
-        if (isWaitingForAnswer.current && questionAskedTime.current) {
-            const checkSilence = () => {
-                const timeSinceQuestion = Date.now() - questionAskedTime.current;
-                const timeSinceLastSpeech = lastUserSpeechTime.current ?
-                    Date.now() - lastUserSpeechTime.current : timeSinceQuestion;
-
-                // If 30 seconds of silence after question
-                if (timeSinceLastSpeech > 30000 && vapiRef.current) {
-                    vapiRef.current.send({
-                        type: "response.create",
-                        response: {
-                            instructions: "I notice you're taking some time to think. That's perfectly fine! Feel free to share your thoughts when you're ready. If you need clarification on the question, just let me know."
-                        },
-                    });
-                }
-
-                // If 60 seconds, provide hints
-                if (timeSinceLastSpeech > 60000 && vapiRef.current) {
-                    vapiRef.current.send({
-                        type: "response.create",
-                        response: {
-                            instructions: "Would you like me to rephrase the question or provide some guidance on how to approach your answer? Remember, there's no perfect answer - I'm interested in hearing your perspective."
-                        },
-                    });
-                }
-
-                // If 2 minutes, gently move forward
-                if (timeSinceLastSpeech > 120000) {
-                    moveToNextQuestion();
-                }
-            };
-
-            silenceTimeout = setInterval(checkSilence, 10000); // Check every 10 seconds
-        }
-
-        return () => {
-            if (silenceTimeout) {
-                clearInterval(silenceTimeout);
-            }
-        };
-    }, [isWaitingForAnswer.current, moveToNextQuestion]);
+    console.log(conversationLog);
 
     // API helpers
     const apiStart = useCallback(async (id) => {
         try {
-            const response = await axios.patch("/api/Interviews/start", {
-                interviewId: id
-            });
+            const response = await axios.patch("/api/Interviews/start", { interviewId: id });
             if (response.status !== 200) throw new Error("Failed to start interview");
             return response.data;
         } catch (error) {
@@ -373,43 +158,19 @@ export default function Page() {
 
     const apiGetQuestions = useCallback(async () => {
         try {
-            const response = await axios.post("/api/Interviews/questions/get-questions", {
-                interview_id: interviewId
-            });
+            const response = await axios.post("/api/Interviews/questions/get-questions", { interview_id: interviewId });
             const data = response.data.question;
             setQuestions(data || []);
-            return data;
         } catch (error) {
             console.error("Error fetching questions:", error);
+            // Fallback to dummy data
             setQuestions([
-                { id: 1, question: "Tell me about yourself and your experience." },
-                { id: 2, question: "What are your strengths and weaknesses?" },
-                { id: 3, question: "Why do you want to work here?" }
+                { id: 1, question_text: { question: "Tell me about yourself and your experience." } },
+                { id: 2, question_text: { question: "What are your strengths and weaknesses?" } },
+                { id: 3, question_text: { question: "Why do you want to work here?" } }
             ]);
         }
     }, [interviewId]);
-
-    const apiAnswer = useCallback(async (questionId, questionText, answerText) => {
-        try {
-            console.log("check");
-            //     const response = await fetch("/api/interviews/answer", {
-            //         method: "POST",
-            //         headers: { "Content-Type": "application/json" },
-            //         body: JSON.stringify({
-            //             qnaId: questionId,
-            //             question: questionText,
-            //             answer: answerText,
-            //             score: currentScore,
-            //             feedback: currentFeedback
-            //         }),
-            //     });
-            //     if (!response.ok) throw new Error("Failed to submit answer");
-            //     return await response.json();
-        } catch (error) {
-            console.error("Error submitting answer:", error);
-            setLog((prev) => [...prev, "Error submitting answer. Please try again."]);
-        }
-    }, [currentScore, currentFeedback]);
 
     const apiGetInterview = useCallback(async () => {
         if (!interviewId) return;
@@ -418,38 +179,26 @@ export default function Page() {
             const response = await axios.get(`/api/Interviews/${interviewId}`);
             const data = response.data.interview;
             setInterviewInfo(data);
-
-            setInterviewDuration(data.duration_minutes)
         } catch (error) {
             console.error("Error fetching interview info:", error);
-            setInterviewInfo({ title: "Technical Interview", description: "General interview" });
+            // Fallback to dummy data
+            setInterviewInfo({ title: "Technical Interview", description: "General interview", duration_minutes: 30 });
         }
     }, [interviewId]);
 
     const endInterview = useCallback(async () => {
         try {
-            // Save final conversation history
-            await saveConversationToDB(conversationHistory);
-
-            // // End interview in database
-            // await axios.patch(`/api/Interviews/end-interview`, {
-            //     interviewId,
-            //     conversationHistory,
-            //     finalScore: conversationHistory.reduce((acc, item) => acc + item.score, 0) / conversationHistory.length
-            // });
-
-            // Stop Vapi
             if (vapiRef.current) {
                 vapiRef.current.stop();
             }
-
             setVapiStatus("ended");
+            // You can add a final API call here to save the complete interview state.
         } catch (error) {
             console.error("Error ending interview:", error);
         }
-    }, [interviewId, conversationHistory, saveConversationToDB]);
+    }, []);
 
-    // Auth state
+    // Authentication check
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
@@ -465,19 +214,73 @@ export default function Page() {
         }
     }, [interviewId, apiGetQuestions, apiGetInterview]);
 
-    // Initialize Vapi with enhanced system prompt
+    // **Core Vapi initialization and interview start logic**
     useEffect(() => {
+        // Wait for both questions and interviewInfo to be loaded
+        if (!questions.length || !interviewInfo || hasStarted.current) {
+            return;
+        }
+
         if (!VAPI_PUBLIC_KEY) {
             console.error("Missing NEXT_PUBLIC_VAPIAI_API_KEY");
             return;
         }
 
+        hasStarted.current = true;
+        setVapiStatus("connecting");
+        apiStart(interviewId);
+
         const vapi = new Vapi(VAPI_PUBLIC_KEY);
         vapiRef.current = vapi;
 
+        const assistantOptions = {
+            name: "AI Recruiter",
+            // The first message now includes the first question as part of the introduction
+            firstMessage: `Hello ${user?.displayName || "there"}! Welcome to your interview for ${interviewInfo?.title || "this position"}. I'm excited to learn more about you. Our first question is: ${questions[0]?.question_text?.question}. Please take your time to think about your answer.`,
+            transcriber: {
+                provider: "deepgram",
+                model: "nova-2",
+                language: "en-US",
+            },
+            voice: {
+                provider: "playht",
+                voiceId: "jennifer",
+            },
+            model: {
+                provider: "openai",
+                model: "gpt-4",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are a professional AI interviewer conducting a ${interviewInfo.duration_minutes} minute interview for ${interviewInfo.title || "this position"}. Your goal is to maintain a professional conversation flow, guide the candidate, and ask questions systematically.
+
+**KEY RESPONSIBILITIES:**
+1.  **Ask a single question at a time.** Wait for the candidate's complete answer before moving on.
+2.  **After the candidate answers, analyze their response.** Provide a single sentence of constructive feedback that is both encouraging and specific.
+3.  **After feedback, transition smoothly to the next question.** Announce the next question clearly.
+4.  If the candidate says "I don't know," "pass," or gives a very short, non-committal answer, politely ask them to elaborate or rephrase the question to help them. Do not move to the next question until you have received a meaningful response or they explicitly ask to move on.
+5.  If the candidate is silent for more than 15 seconds after you've asked a question, provide a gentle nudge like, "Take your time, I'm here to listen whenever you're ready," or "Feel free to share your thoughts."
+6.  When you have asked all the questions in the provided list, thank the candidate for their time and conclude the interview gracefully.
+
+**LIST OF QUESTIONS TO ASK IN ORDER:**
+${questions.map((q, i) => `${i + 1}. ${q.question_text.question}`).join('\n')}
+
+**EXAMPLE CONVERSATION FLOW:**
+- Me (AI): "Hello! Let's start with our first question: [Question 1]?"
+- Candidate: "[Their answer]"
+- Me (AI): "Thank you for that. That was a great start; you provided a good overview. Now, let's move on to the next question: [Question 2]?"
+- Candidate: "[Their answer]"
+- Me (AI): "That's a very insightful point. To make it even stronger, consider adding an example. The next question is: [Question 3]?"
+
+**CONCLUDING THE INTERVIEW:**
+- When all questions are covered, say: "Thank you for completing the interview! We've covered all the questions. The interview will now conclude. You did great, and we'll be in touch with the results soon."`
+                    },
+                ],
+            },
+        };
+
         const handleCallStart = (call) => {
             setVapiStatus("connected");
-            setInterviewStartTime(Date.now());
             if (call?.remoteMediaStream) {
                 setRemoteStream(call.remoteMediaStream);
             }
@@ -488,45 +291,37 @@ export default function Page() {
             setRemoteStream(null);
         };
 
+
         const handleTranscript = (transcript) => {
-            const entry = `${transcript.role}: ${transcript.text}`;
-            setLog((prev) => [...prev, entry]);
+            if (transcript.role === "user") {
+                setConversationLog(prev => [...prev, { role: "human", text: transcript.text }]);
 
-            // Update conversation history
-            setConversationHistory(prev => {
-                const updated = [...prev];
-                const lastEntry = updated[updated.length - 1] || {};
-
-                if (transcript.role === "user") {
-                    lastUserSpeechTime.current = Date.now();
-                    setAnswer(transcript.text);
-
-                    // Check if this is a complete answer
-                    if (isWaitingForAnswer.current && transcript.text.length > 20) {
-                        processAnswer(transcript.text);
-                    }
-                }
-
-                return updated;
-            });
+            }
         };
+
 
         const handleMessage = (message) => {
             if (message?.message) {
-                setLog((prev) => [...prev, `Assistant: ${message.message}`]);
+                setConversationLog(prev => [...prev, { role: "AI", text: message.message }]);
+                console.log(conversationLog);
             }
         };
+
 
         const handleError = (error) => {
             console.error("Vapi error:", error);
             setLog((prev) => [...prev, `Error: ${error.message || "Unknown error"}`]);
         };
 
+
         vapi.on("call-start", handleCallStart);
         vapi.on("call-end", handleCallEnd);
         vapi.on("transcript", handleTranscript);
         vapi.on("message", handleMessage);
         vapi.on("error", handleError);
+
+        // Start the call after setting up listeners
+        vapi.start(assistantOptions);
 
         return () => {
             try {
@@ -537,152 +332,7 @@ export default function Page() {
             vapi.removeAllListeners();
             vapiRef.current = null;
         };
-    }, [processAnswer]);
-
-    // Start interview with enhanced system prompt
-    useEffect(() => {
-        const startInterview = async () => {
-            if (!interviewId || !vapiRef.current || startedRef.current || questions.length === 0) {
-                return;
-            }
-
-            startedRef.current = true;
-            setIsInterviewStarted(true);
-            setVapiStatus("connecting");
-
-            try {
-                await apiStart(interviewId);
-
-                const assistantOptions = {
-                    name: "AI Recruiter",
-                    firstMessage: `Hello ${user?.displayName || "there"}! Welcome to your interview for ${interviewInfo?.title || "this position"}. I'm excited to learn more about you today. We have ${questions.length} questions to cover, and this should take about 30 minutes. Are you ready to begin?`,
-                    transcriber: {
-                        provider: "deepgram",
-                        model: "nova-2",
-                        language: "en-US",
-                    },
-                    voice: {
-                        provider: "playht",
-                        voiceId: "jennifer",
-                    },
-                    model: {
-                        provider: "openai",
-                        model: "gpt-4",
-                        messages: [
-                            {
-                                role: "system",
-                                content: `You are a professional AI interviewer conducting a ${interviewDuration} interview for ${interviewInfo?.title || "this position"}. Your goal is to maintain professional conversation flow and gather comprehensive responses.
-
-CORE RESPONSIBILITIES:
-1. Ask questions systematically and wait for complete responses
-2. Provide encouraging, constructive feedback after each answer based on content quality, relevance, and depth
-3. Handle difficult situations professionally
-4. Keep the candidate engaged throughout the entire interview duration
-5. Ensure every question gets a meaningful response
-6. Evaluate answers contextually and provide specific, actionable feedback
-
-QUESTIONS TO ASK IN ORDER:
-${questions.map((q, i) => `${i + 1}. ${q.question_text.question}`).join('\n')}
-
-PROFESSIONAL COMMUNICATION GUIDELINES:
-
-FOR ANSWER EVALUATION AND FEEDBACK:
-- Assess answers based on: relevance to question, depth of response, specific examples provided, clarity of communication
-- Provide constructive feedback that highlights strengths and suggests improvements
-- Be specific in feedback: "I appreciate how you provided a concrete example of..." rather than generic praise
-- Connect their responses to professional requirements when possible
-- Acknowledge effort and thoughtfulness in responses
-
-FOR NON-RESPONSIVE CANDIDATES:
-- If candidate says "I don't know" or "Nothing": "I understand this might be challenging. Let me help you think through this. For example, [provide a gentle prompt or reframe the question]. What comes to mind when you think about [specific aspect]?"
-- If candidate seems hesitant: "Take your time. There's no rush. Sometimes the best insights come when we reflect a moment. What's the first thing that comes to mind?"
-- If candidate gives very short answers: "That's a good start! Could you tell me more about that? I'm particularly interested in [specific follow-up based on their brief response]."
-
-FOR INTELLIGENT FEEDBACK DELIVERY:
-- Analyze the content quality, not just length
-- Recognize when candidates provide valuable insights even in brief answers
-- Identify missing elements: "Your example was great. It would be even stronger if you could tell me about the outcome or what you learned."
-- Provide forward-looking suggestions: "For similar situations in the future, you might consider..."
-- Balance encouragement with constructive criticism
-
-CONVERSATION FLOW MANAGEMENT:
-- After providing feedback, smoothly transition to next question
-- Use natural bridges: "Building on what you shared..." or "That gives me great insight into your background. Now let's explore..."
-- Maintain interview momentum while ensuring thoroughness
-- Reference previous answers when relevant: "Earlier you mentioned X, how does that relate to..."
-
-SCORING CONSIDERATIONS (for backend evaluation):
-- Content relevance and depth (40%)
-- Use of specific examples and details (30%) 
-- Communication clarity and structure (20%)
-- Professional insight and self-awareness (10%)
-
-ENGAGEMENT AND PROFESSIONALISM:
-- Use the candidate's name occasionally
-- Show genuine interest: "That's really insightful," "I hadn't thought about it that way"
-- Ask thoughtful follow-ups when appropriate
-- Maintain warmth while being professional
-- Create a safe space for honest responses
-
-HANDLING VARIOUS RESPONSE TYPES:
-- Excellent responses: Provide specific praise and probe for additional insights
-- Good responses: Acknowledge strengths and suggest areas for expansion  
-- Weak responses: Offer gentle redirection and second chances
-- Off-topic responses: Acknowledge value then guide back to question focus
-
-Remember: Your role is to conduct a thorough, fair evaluation while making the candidate feel heard and respected. Every response deserves thoughtful consideration and constructive feedback.
-
-Current question: ${currentQuestion?.question_text.question || "Starting introduction"}`,
-                            },
-                        ],
-                    },
-                };
-
-                await vapiRef.current.start(assistantOptions);
-
-                // Start with first question after brief introduction
-                if (currentQuestion) {
-                    setTimeout(() => {
-                        vapiRef.current?.send({
-                            type: "response.create",
-                            response: {
-                                instructions: `Perfect! Let's start with our first question: ${currentQuestion.question_text.question}. Please take your time and share as much detail as you'd like.`
-                            },
-                        });
-                        questionAskedTime.current = Date.now();
-                        isWaitingForAnswer.current = true;
-                    }, 3000);
-                }
-
-            } catch (error) {
-                console.error("Error starting interview:", error);
-                setVapiStatus("idle");
-                startedRef.current = false;
-                setIsInterviewStarted(false);
-            }
-        };
-
-        startInterview();
-    }, [interviewId, user, interviewInfo, questions, currentQuestion, apiStart, interviewDuration]);
-
-    // Auto-end interview after duration
-    useEffect(() => {
-        if (interviewStartTime) {
-            const timer = setTimeout(() => {
-                if (vapiRef.current && vapiStatus === "connected") {
-                    vapiRef.current.send({
-                        type: "response.create",
-                        response: {
-                            instructions: "We've reached the end of our scheduled interview time. Thank you so much for your thoughtful responses today. It's been a pleasure speaking with you, and we'll be in touch soon with next steps."
-                        },
-                    });
-                    setTimeout(() => endInterview(), 5000);
-                }
-            }, interviewDuration);
-
-            return () => clearTimeout(timer);
-        }
-    }, [interviewStartTime, interviewDuration, vapiStatus, endInterview]);
+    }, [interviewId, user, interviewInfo, questions, apiStart]);
 
     const statusBadge = {
         connected: { text: "Interview in progress", className: "bg-green-50 text-green-700" },
@@ -703,9 +353,9 @@ Current question: ${currentQuestion?.question_text.question || "Starting introdu
                                 <span className="text-gray-600">
                                     Welcome, <span className="text-blue-600 font-medium">{user?.displayName || "Candidate"}</span>
                                 </span>
-                                {interviewStartTime && (
+                                {vapiStatus === "connected" && (
                                     <span className="text-sm text-gray-500">
-                                        Duration: {Math.floor((Date.now() - interviewStartTime) / 60000)}m
+                                        Duration: {interviewInfo?.duration_minutes}m
                                     </span>
                                 )}
                             </div>
@@ -756,13 +406,13 @@ Current question: ${currentQuestion?.question_text.question || "Starting introdu
                         {/* Controls */}
                         <div className="flex justify-center mb-6">
                             <div className="flex items-center gap-4 bg-white rounded-full px-6 py-3 shadow-lg border">
-                                <button className="rounded-full bg-black w-12 h-12 p-0">
+                                <button className="rounded-full bg-black w-12 h-12 p-0" onClick={() => vapiRef.current?.start()}>
                                     <Mic className="w-5 h-5 text-white mx-auto" />
                                 </button>
                                 <button className="rounded-full bg-black w-12 h-12 p-0">
                                     <Video className="w-5 h-5 text-white mx-auto" />
                                 </button>
-                                <button className="rounded-full bg-black w-12 h-12 p-0">
+                                <button className="rounded-full bg-red-500 w-12 h-12 p-0" onClick={endInterview}>
                                     <Phone className="w-5 h-5 text-white mx-auto" />
                                 </button>
                             </div>
