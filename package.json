@@ -11,7 +11,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@react-three/drei": "^10.7.6",
-    "@vapi-ai/web": "^2.3.8",
+    "@vapi-ai/web": "^2.3.10",
     "axios": "^1.11.0",
     "clsx": "^2.1.1",
     "firebase": "^12.2.1",
