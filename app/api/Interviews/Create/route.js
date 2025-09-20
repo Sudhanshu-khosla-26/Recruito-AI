@@ -40,7 +40,7 @@ export async function POST(request) {
             return NextResponse.json({ error: "Missing required fields 'job_id' or 'application_id'", bodyReceived: body }, { status: 400 });
         }
 
-        // Optional: check job exists (helps avoid 'job not found' surprises)
+
         const jobDoc = await adminDB.collection("jobs").doc(job_id).get();
         if (!jobDoc.exists) {
             console.warn("[interviews.create] job not found:", job_id);
@@ -77,10 +77,13 @@ export async function POST(request) {
         if (applicationRed.exists) {
             await adminDB.collection("applications").doc(application_id).update({
                 status: "interview_scheduled",
+                interviews_list: [...((applicationRed.data().interviews_list) || []), docRef.id],
             });
         }
 
         console.log("[interviews.create] created interview id:", docRef.id);
+
+
 
         return NextResponse.json({ message: "Interview created successfully", id: docRef.id }, { status: 201 });
     } catch (error) {

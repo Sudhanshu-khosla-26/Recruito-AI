@@ -7,6 +7,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/aut
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { serverTimestamp } from "firebase/firestore";
+import axios from "axios"
 
 export default function Page() {
     const [email, setEmail] = useState("")
@@ -79,26 +80,17 @@ export default function Page() {
             console.log(user);
 
             // Firestore reference
-            const userRef = doc(db, "users", user.uid);
-            const userSnap = await getDoc(userRef);
-            console.log(userSnap);
-
-            if (!userSnap.exists()) {
-                // If new user, assign default or chosen role
-                await setDoc(userRef, {
-                    name: user.displayName,
-                    email: user.email,
-                    status: "active",
-                    role: "jobseeker",
-                    createdAt: serverTimestamp(),
-                    profilePicture: user.photoURL,
-                    is_verified: false,
-                    phoneNo: "",
-                });
-            }
-
             const idToken = await user.getIdToken();
 
+            const res = await axios.post('/api/auth/create', {
+                name: user.displayName,
+                email: user.email,
+                profilePicture: user.photoURL,
+                token: idToken,
+            });
+            console.log(res.data);
+
+            console.log(idToken, " ID TOKEN");
 
 
             await fetch("/api/auth/set-session", {
@@ -145,7 +137,7 @@ export default function Page() {
                     <div
                         role="region"
                         aria-label="Sign in form"
-                        className="w-full max-w-md  rounded-xl bg-blue-600 p-6 shadow-lg ring-1 ring-blue-700/40 md:p-8"
+                        className="w-full max-w-md  rounded-xl bg-[#EA7125] p-6 shadow-lg ring-1 ring-blue-700/40 md:p-8"
                     >
                         <header className="mb-6 text-center">
                             <h2 className="text-2xl pt-6 font-semibold text-white">Sign In</h2>
@@ -158,12 +150,12 @@ export default function Page() {
                                 aria-label="Sign in with Google"
                                 onClick={() => handleGoogleSignIn()}
                             >
-                                <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path
-                                        fill="#EA4335"
-                                        d="M12 10.2v3.6h5.1c-.2 1.2-1.5 3.6-5.1 3.6-3.1 0-5.7-2.6-5.7-5.7S8.9 6 12 6c1.8 0 3 .7 3.7 1.3l2.5-2.5C16.7 3.5 14.6 2.7 12 2.7 6.9 2.7 2.7 6.9 2.7 12S6.9 21.3 12 21.3c6.9 0 9.3-4.8 9.3-7.3 0-.5 0-.8-.1-1.2H12z"
-                                    />
+                                <svg className="w-5 h-5" width="19" height="19" viewBox="0 0 19 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3.3882 7.1375C3.77811 6.10283 4.53059 5.2026 5.5383 4.56522C6.54601 3.92784 7.75748 3.58588 8.99987 3.58812C10.4082 3.58812 11.6815 4.02668 12.6815 4.74445L15.5915 2.19278C13.8182 0.836911 11.5457 0 8.99987 0C5.0582 0 1.66487 1.97204 0.0332031 4.86066L3.3882 7.1375Z" fill="#EA4335" />
+                                    <path d="M12.3671 14.6266C11.4587 15.1402 10.3054 15.4142 9.00042 15.4142C7.76297 15.4164 6.55608 15.0774 5.55061 14.445C4.54514 13.8126 3.79203 12.919 3.39792 11.8906L0.03125 14.1313C0.857288 15.5971 2.13564 16.8304 3.7211 17.6911C5.30656 18.5518 7.13559 19.0055 9.00042 19.0006C11.4446 19.0006 13.7796 18.2386 15.5287 16.8089L12.3679 14.6266H12.3671Z" fill="#34A853" />
+                                    <path d="M15.5283 16.5C17.3575 14.9765 18.545 12.709 18.545 9.80484C18.545 9.27667 18.4542 8.70907 18.3183 8.18164H9V11.6311H14.3633C14.0992 12.7909 13.3883 13.6888 12.3675 14.2779L15.5283 16.5Z" fill="#4A90E2" />
                                 </svg>
+
                                 Sign in with Google
                             </button>
                             <div className="my-4 flex items-center gap-3" role="separator" aria-label="divider">
@@ -202,7 +194,7 @@ export default function Page() {
                             <button
                                 type="submit"
                                 onClick={handleSignin}
-                                className="mt-2 mb-6 w-full rounded-md bg-orange-500 px-4 py-2.5 text-center text-white transition hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
+                                className="mt-2 mb-6 w-full rounded-md bg-[#2C2C2C] px-4 py-2.5 text-center text-white transition hover:bg-[#272727] focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
                             >
                                 Sign In
                             </button>

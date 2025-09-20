@@ -6,27 +6,30 @@ import { FieldValue } from "firebase-admin/firestore";
 
 export async function POST(request) {
     try {
-        // const session = request.cookies.get("session")?.value;
-        // if (!session) {
-        //     return NextResponse.json({ error: "No session found" }, { status: 400 });
-        // }
-        // let decodedUser;
-        // try {
-        //     decodedUser = await getAuth().verifyIdToken(session);
-        // } catch {
-        //     return NextResponse.json({ error: "Invalid token" }, { status: 403 });
-        // }
+        const session = request.cookies.get("session")?.value;
+        if (!session) {
+            return NextResponse.json({ error: "No session found" }, { status: 400 });
+        }
+        let decodedUser;
+        try {
+            decodedUser = await getAuth().verifySessionCookie(session, true);
+        } catch {
+            return NextResponse.json({ error: "Invalid token" }, { status: 403 });
+        }
 
-        // console.log(decodedUser);
+        console.log(decodedUser);
 
-        // const validRoles = ["Admin", "HHR", "HR", "HM", "recruiter"];
+        const user = await adminDB.collection("users").doc(decodedUser.uid).get();
+        if (!user.exists) {
+            return NextResponse.json({ error: "User does not exist" }, { status: 404 });
+        }
+        const decodedUserData = user.data();
+        if (decodedUserData.role != "jobseeker") {
+            return NextResponse.json({ error: "User role is not valid" }, { status: 403 });
+        }
 
-        // if (!validRoles.includes(decodedUser.role)) {
-        //     return NextResponse.json({ error: "User role is not valid" }, { status: 403 });
-        // }
-
-        const { job_id, resume_url, match_percentage, applicant_phone, } = request.json();
-        if (!job_id || !resume_url || !match_percentage || !applicant_phone) {
+        const { job_id, resume_url, match_percentage, applicant_phone, analyzed_paramters, applicant_email, applicant_name } = await request.json();
+        if (!job_id || !resume_url || !match_percentage || !applicant_phone || !applicant_email || !applicant_name) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
@@ -37,10 +40,12 @@ export async function POST(request) {
             resume_url: resume_url,
             match_percentage: match_percentage,
             applied_at: FieldValue.serverTimestamp(),
-            applicant_name: decodedUser.name,
-            applicant_email: decodedUser.email,
+            applicant_name: applicant_name,
+            applicant_email: applicant_email,
             applicant_phone: applicant_phone,
             status: "applied",
+            type: "manual-apply",
+            analyzed_paramters: analyzed_paramters,
         };
 
         await adminDB.collection("applications").add(applicationData);

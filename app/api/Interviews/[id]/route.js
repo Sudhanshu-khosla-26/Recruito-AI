@@ -13,6 +13,7 @@ export async function GET(request, { params }) {
             );
         }
 
+
         // ✅ Fetch interview from Firestore
         const interviewRef = await adminDB.collection("interviews").doc(id).get();
 

@@ -124,14 +124,13 @@ export default function Page() {
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOn, setIsCameraOn] = useState(true);
     const [elapsedTime, setElapsedTime] = useState(0);
-
     const [conversationLog, setConversationLog] = useState([]);
     console.log("Conversation Log:", conversationLog);
-
     const { id: interviewId } = useParams();
     const vapiRef = useRef(null);
     const intervalRef = useRef(null);
     const muteTimeoutRef = useRef(null);
+
 
     // API helpers
     const apiStart = useCallback(async (id) => {
@@ -430,15 +429,7 @@ At the end say: "Thank you so much for your time today! We've covered all the qu
                                 <span className="text-gray-600">
                                     Welcome, <span className="text-blue-600 font-medium">{user?.displayName || "Candidate"}</span>
                                 </span>
-                                {vapiStatus === "connected" && (
-                                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                                        <Clock className="w-4 h-4" />
-                                        <span>{formatTime(elapsedTime)} / {interviewInfo?.duration_minutes} mins</span>
-                                    </div>
-                                )}
-                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusBadge.className}`}>
-                                    {statusBadge.text}
-                                </span>
+
                             </div>
                             <button className="w-8 h-8 hover:bg-gray-300 text-black rounded-full border border-black">
                                 <User className="w-4 h-4 rounded-full text-black mx-auto" />
@@ -448,12 +439,14 @@ At the end say: "Thank you so much for your time today! We've covered all the qu
                 </header>
 
                 {/* Main */}
-                <main className="flex-1 p-6">
+                <main className="flex-1 p-6 ">
                     <div className="max-w-6xl mx-auto">
+
                         <div className="flex flex-col items-center justify-center md:flex-row gap-4 mb-6">
+
                             {/* AI Interviewer */}
                             <Card className="relative overflow-hidden h-72 w-full md:w-1/2">
-                                <div className="absolute inset-0 bg-gradient-to-br from-black via-blue-600 to-purple-800" />
+                                <div className="absolute inset-0 bg-gradient-to-br from-black via-orange-500 to-orange-600" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
                                 <div className="absolute top-4 left-4 z-10">
                                     <span className="bg-white/90 backdrop-blur-sm text-gray-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -492,16 +485,9 @@ At the end say: "Thank you so much for your time today! We've covered all the qu
                         </div>
 
                         {/* Controls */}
-                        <div className="flex justify-center mb-6">
-                            <div className="flex items-center gap-4 bg-white rounded-full px-6 py-3 shadow-lg border">
-                                {vapiStatus === "idle" && (
-                                    <button
-                                        className="rounded-full bg-blue-500 w-12 h-12 p-0 flex items-center justify-center text-white"
-                                        onClick={handleStartInterview}
-                                    >
-                                        <Play className="w-5 h-5" />
-                                    </button>
-                                )}
+                        <div className="flex flex-col justify-center mb-6">
+                            {vapiStatus !== "idle" && <div className="flex items-center gap-4 w-fit mx-auto bg-white rounded-full px-6 py-3 shadow-lg border">
+
                                 <button
                                     className={`rounded-full w-12 h-12 p-0 flex items-center justify-center ${isMuted ? 'bg-gray-400' : 'bg-black'}`}
                                     onClick={toggleMute}
@@ -521,11 +507,36 @@ At the end say: "Thank you so much for your time today! We've covered all the qu
                                 >
                                     <Phone className="w-5 h-5 text-white" />
                                 </button>
+
+                            </div>}
+                            {vapiStatus === "idle" && (
+                                <button
+                                    className="rounded-full mx-auto gap-2 bg-green-600 cursor-pointer w-fit px-4 mt-3 py-1.5 flex items-center justify-center text-white font-bold"
+                                    onClick={handleStartInterview}
+                                >
+                                    Start Interview
+                                    <Play className="w-5 h-5" />
+                                </button>
+                            )}
+                            <div className="flex items-center justify-center mt-6">
+
+                                {vapiStatus === "connected" && (
+                                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                                        <Clock className="w-4 h-4" />
+                                        <span>{formatTime(elapsedTime)} / {interviewInfo?.duration_minutes} mins</span>
+                                    </div>
+                                )}
+                                {vapiStatus !== "idle" &&
+                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusBadge.className}`}>
+                                        {statusBadge.text}
+                                    </span>
+                                }
                             </div>
+
                         </div>
 
                         {/* Conversation Log Display */}
-                        <div className="mt-8">
+                        {/* <div className="mt-8">
                             <h2 className="text-xl font-bold mb-4">Conversation Log</h2>
                             <div className="bg-white p-4 rounded-lg shadow-inner max-h-80 overflow-y-auto">
                                 {conversationLog.length > 0 ? (
@@ -540,7 +551,7 @@ At the end say: "Thank you so much for your time today! We've covered all the qu
                                     </p>
                                 )}
                             </div>
-                        </div>
+                        </div> */}
                     </div>
                 </main>
             </div>

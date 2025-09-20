@@ -197,7 +197,6 @@ const Dashboard = () => {
 
 const ScheduleModal = ({ onClose, onSchedule, setSelectedTypes, customType, selectedTypes, setCustomType, setSelectedDuration, selectedDuration }) => {
 
-
     console.log(selectedDuration, selectedTypes);
 
     const durations = ["5 Min", "10 Min", "15 Min", "20 Min", "30 Min"]

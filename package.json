@@ -17,6 +17,7 @@
     "firebase": "^12.2.1",
     "firebase-admin": "^13.5.0",
     "force": "^0.0.3",
+    "googleapis": "^160.0.0",
     "lucide-react": "^0.542.0",
     "mammoth": "^1.10.0",
     "next": "15.5.2",
