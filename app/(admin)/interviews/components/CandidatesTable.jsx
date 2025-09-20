@@ -2,10 +2,10 @@
 import { useState } from "react"
 import { ChevronRight, ChevronDown } from "lucide-react"
 
-const CandidatesTable = ({ onScheduleInterview, candidates, setSelectedCandidate }) => {
+const CandidatesTable = ({ onScheduleInterview, candidates, setSelectedCandidate, selectedOption, setSelectedOption }) => {
 
     const [selectedRow, setSelectedRow] = useState(null)
-    const [selectedOption, setSelectedOption] = useState()
+
 
 
 
