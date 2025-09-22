@@ -33,6 +33,7 @@ export default function RootLayout({ children }) {
           transition={Slide}
           position="top-right"
           autoClose={2000}
+          className={"z-[99999]"}
         />
       </body>
     </html>

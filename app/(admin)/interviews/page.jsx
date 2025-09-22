@@ -9,6 +9,7 @@ import { ChevronUp, X, ArrowRight } from "lucide-react"
 import axios from "axios"
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { toast } from 'react-toastify';
 
 const Dashboard = () => {
     const [currentView, setCurrentView] = useState("candidates")
@@ -181,7 +182,7 @@ const Dashboard = () => {
 
             {showModal && (
                 selectedOption === "Interview with HR" ?
-                    <SlotModal onClose={() => setShowModal(false)} />
+                    <SlotModal onClose={() => setShowModal(false)} selectedCandidate={selectedCandidate} />
                     :
                     <ScheduleModal
                         onClose={() => setShowModal(false)}
@@ -319,23 +320,392 @@ const ScheduleModal = ({ onClose, onSchedule, setSelectedTypes, customType, sele
 }
 
 
-const SlotModal = ({ onClose }) => {
+// const SlotModal = ({ onClose, selectedCandidate }) => {
+//     const [startDate, setStartDate] = useState(null);
+//     const [endDate, setEndDate] = useState(null);
+//     const [duration, setDuration] = useState("");
+//     const [email, setEmail] = useState('');
+//     const [slots, setSlots] = useState([]);
+//     const [interviewer, setInterviewer] = useState('');
+//     const [selectedSlot, setSelectedSlot] = useState(null);
+//     const [loading, setLoading] = useState(false);
+//     const [error, setError] = useState(false);
+//     const [showslots, setShowSlots] = useState(false);
+
+//     const durationRef = useRef(null);
+//     console.log(selectedSlot, "selectedSlot");
+//     console.log("selectedCandidate", selectedCandidate);
+
+//     const handleFetch = async () => {
+//         if (!email || !startDate || !endDate || !duration) {
+//             toast.info('Please fill in all fields.');
+//             return;
+//         }
+
+//         try {
+//             const response = await axios.post('/api/calender/slots', {
+//                 interviewer_email: email,
+//                 startDate: startDate.toISOString(), // safer to send ISO string
+//                 endDate: endDate.toISOString(),
+//                 duration: duration, // ✅ make sure this is the state, not setDuration
+//                 selectedOption: "Whr"
+//             });
+
+//             if (response.data.success) {
+//                 toast.success('Available slots fetched successfully!');
+//             }
+
+//             console.log('Available slots response:', response.data);
+//             setSlots(response.data.availableSlots);
+//             setInterviewer(response.data.interviewer);
+//             setSelectedSlot(null);
+//             setShowSlots(true);
+//         } catch (error) {
+//             toast.error(error?.response?.data?.error);
+//         }
+
+//         console.log('Fetching slots with the following data:');
+//         console.log('HR Email:', email);
+//         console.log('From Date:', startDate);
+//         console.log('To Date:', endDate);
+//         console.log('Duration:', duration);
+//     };
+//     const handleSlotSelect = (slotStartTime) => {
+//         setSelectedSlot(slotStartTime);
+//     };
+
+//     const ScheduleInterview = async () => {
+
+//         if (!selectedSlot) {
+//             alert("Please select an available slot first.");
+//             return;
+//         }
+
+
+//         let selectedSlotData = null;
+//         for (const date in slots) {
+//             selectedSlotData = slots[date].find(slot => slot.startTime === selectedSlot);
+//             if (selectedSlotData) {
+//                 break;
+//             }
+//         }
+
+//         if (!selectedSlotData) {
+//             alert("Selected slot data not found. Please try fetching slots again.");
+//             return;
+//         }
+
+
+//         const { startTime, endTime } = selectedSlotData;
+//         const mode = "Whr";
+
+//         const data = {
+//             interviewer_email: interviewer.email,
+//             interviewer_id: interviewer.id,
+//             application_id: selectedCandidate.application_id,
+//             job_id: selectedCandidate.job_id,
+//             candidate_email: selectedCandidate.candidate.applicant_email,
+//             candidate_name: selectedCandidate.candidate.applicant_name,
+//             candidate_id: selectedCandidate?.candidate?.id || "",
+//             startTime: startTime,
+//             endTime: endTime,
+//             mode: mode,
+//         };
+
+//         try {
+//             const response = await axios.post('/api/calender/book', data);
+//             console.log('Interview booked response:', response.data);
+//             toast.success(response.data.message);
+//             onClose();
+//         } catch (error) {
+//             console.error('Error booking interview:', error.response?.data || error.message);
+//             toast.error(error.response?.data?.error || "Failed to book interview.");
+//         }
+//     };
+
+//     return (
+//         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 animate-fadeIn">
+//             <div className="bg-white relative rounded-2xl p-6 max-w-3xl w-full mx-4 animate-slideUp">
+//                 <button
+//                     onClick={onClose}
+//                     className="absolute top-4 font-bold cursor-pointer  right-6 text-gray-500 hover:text-gray-800"
+//                 >
+
+//                     x
+//                 </button>
+//                 <div className="flex flex-col w-full h-fit">
+//                     <span className="text-orange-500 mx-auto font-bold ">Schedule Interview With Human Resource</span>
+//                     <div className="flex items-center justify-center gap-3">
+//                         {/* <Mail className='w-5 h-5 text-gray-400' /> */}
+//                         <input
+//                             type="email"
+//                             name="email"
+//                             placeholder="Put email ID of HR"
+//                             value={email}
+//                             onChange={(e) => setEmail(e.target.value)}
+//                             className="border text-sm text-black border-gray-300 rounded-full px-4 py-0.5 mt-2 w-xs "
+//                         />
+//                     </div>
+//                     <div className="flex items-center justify-center gap-3 mt-4 mx-auto w-full ">
+//                         <DatePicker
+//                             selected={startDate}
+//                             onChange={(date) => setStartDate(date)}
+//                             selectsStart
+//                             startDate={startDate}
+//                             endDate={endDate}
+//                             placeholderText="From Date"
+//                             className="w-28 px-4 py-0.5 border border-gray-300 text-sm rounded-full text-black outline-0"
+//                             dateFormat="MM/dd/yyyy"
+//                         />
+
+
+//                         <DatePicker
+//                             selected={endDate}
+//                             onChange={(date) => setEndDate(date)}
+//                             selectsEnd
+//                             startDate={startDate}
+//                             endDate={endDate}
+//                             minDate={startDate}
+//                             placeholderText="To Date"
+//                             className="w-28 px-4 py-0.5 border border-gray-300 text-sm rounded-full text-black outline-0"
+//                             dateFormat="MM/dd/yyyy"
+//                         />
+
+//                         <div className="relative w-36">
+//                             <div
+//                                 onClick={() => durationRef.current?.focus()}
+//                                 className="w-36 px-4 py-1 border border-gray-300 rounded-full text-sm text-black outline-0 cursor-pointer"
+//                             >
+//                                 {duration ? (duration === 60 ? "1 hour" : `${duration} mins`) : "Select Duration"}
+
+//                             </div>
+
+//                             <select
+//                                 ref={durationRef}
+//                                 value={duration}
+//                                 onChange={(e) => setDuration(Number(e.target.value))}
+//                                 className="absolute top-0 text-black text-sm left-0 w-full h-full opacity-0 cursor-pointer"
+//                             >
+//                                 <option value="">Select Duration</option>
+//                                 <option value={15}>15 minutes</option>
+//                                 <option value={30}>30 minutes</option>
+//                                 <option value={45}>45 minutes</option>
+//                                 <option value={60}>1 hour</option>
+//                             </select>
+//                         </div>
+
+
+//                         <button
+//                             onClick={() => { handleFetch() }}
+//                             className="bg-orange-500 text-white rounded-full px-6 py-0.5 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
+//                         >
+//                             Fetch
+//                         </button>
+//                     </div>
+//                     <div className="divider w-5/6 mx-auto my-4 bg-gray-400 h-0.5"></div>
+
+//                     <span className="text-gray-700 text-sm mx-auto mb-4">
+//                         Below are the available Slots: Select and sent invitation
+//                     </span>
+//                     {/* <ul className="overglow-y-auto max-h-48 space-y-1 px-4">
+//                         <li className="flex items-center justify-center gap-1 font-semibold text-sm text-gray-700">
+//                             <div className="text-blue-600">
+//                                 24-08-2025 :
+//                             </div>
+//                             <div className=" cursor-pointer">
+//                                 12:15 to  14:15,
+//                             </div>
+//                             <div className="text-blue-600 cursor-pointer">
+//                                 15:10 to 15:40
+//                             </div>
+
+//                         </li>
+//                         <li className="flex items-center justify-center gap-1 font-semibold text-sm text-gray-700">
+//                             <div className="">
+//                                 24-08-2025 :
+//                             </div>
+//                             <div className="">
+//                                 12:15 to  14:15,
+//                             </div>
+//                             <div className="">
+//                                 15:10 to 15:40
+//                             </div>
+
+//                         </li>
+//                         <li className="flex items-center justify-center gap-1 font-semibold text-sm text-gray-700">
+//                             <div className="">
+//                                 24-08-2025 :
+//                             </div>
+//                             <div className="">
+//                                 12:15 to  14:15,
+//                             </div>
+//                             <div className="">
+//                                 15:10 to 15:40
+//                             </div>
+
+//                         </li>
+//                     </ul> */}
+//                     <ul className="overflow-y-auto max-h-48 space-y-2 px-4 max-w-8/12 mx-auto py-2">
+//                         {Object.entries(slots).length > 0 ? (
+//                             Object.entries(slots).map(([date, dailySlots]) => (
+//                                 <li key={date} className="flex flex-col items-start font-semibold text-sm text-gray-700">
+//                                     <div className="text-blue-600  mt-2">
+//                                         {date}:
+//                                     </div>
+//                                     <div className="flex flex-wrap flex-row ">
+//                                         {dailySlots.map((slot) => (
+//                                             <div
+//                                                 key={slot.startTime}
+//                                                 onClick={() => handleSlotSelect(slot.startTime)}
+//                                                 className={`cursor-pointer min-w-3/12 py-0.5   transition-colors ${selectedSlot === slot.startTime ? 'text-blue-500 ' : ''}`}
+//                                             >
+//                                                 {slot.time}
+//                                             </div>
+//                                         ))}
+//                                     </div>
+//                                 </li>
+//                             ))
+//                         ) : (
+//                             <li className="text-center text-gray-500">
+//                                 No slots available for the selected criteria.
+//                             </li>
+//                         )}
+//                     </ul>
+//                     <div className="flex items-center justify-center w-full gap-8  pt-6" onClick={ScheduleInterview}>
+//                         <button
+
+//                             className="bg-orange-500 text-white rounded-full px-6 py-0.5 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
+//                         >
+//                             Schedule Interview
+//                         </button>
+//                     </div>
+//                     {/* <div className="flex items-center justify-center w-full gap-8  pt-6">
+//                         <button
+
+//                             className="bg-orange-500 text-white rounded-full px-6 py-0.5 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
+//                         >
+//                             Send to HR
+//                         </button>
+//                         <button
+
+//                             className="bg-orange-500 text-white rounded-full px-6 py-0.5 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
+//                         >
+//                             Send to Candidate
+//                         </button>
+//                     </div> */}
+//                 </div>
+//             </div>
+//         </div >
+//     );
+// };
+
+const SlotModal = ({ onClose, selectedCandidate }) => {
     const [startDate, setStartDate] = useState(null);
     const [endDate, setEndDate] = useState(null);
-    const [startTime, setStartTime] = useState(null);
+    const [duration, setDuration] = useState("");
     const [email, setEmail] = useState('');
+    const [slots, setSlots] = useState({});
+    const [interviewer, setInterviewer] = useState(null);
+    const [selectedSlot, setSelectedSlot] = useState(null);
+    const [isScheduled, setIsScheduled] = useState(false); // New state for conditional rendering
+    const [bookingDetails, setBookingDetails] = useState(null);
 
-    const handleFetch = () => {
-        if (!email || !startDate || !endDate || !startTime) {
-            alert('Please fill in all fields.');
+    const durationRef = useRef(null);
+
+    const handleFetch = async () => {
+        if (!email || !startDate || !endDate || !duration) {
+            toast.info('Please fill in all fields.');
             return;
         }
-        console.log('Fetching slots with the following data:');
-        console.log('HR Email:', email);
-        console.log('From Date:', startDate);
-        console.log('To Date:', endDate);
-        console.log('Duration:', startTime);
-        // Add your API call logic here
+
+        try {
+            const response = await axios.post('/api/calender/slots', {
+                interviewer_email: email,
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+                duration: duration,
+                selectedOption: "Whr"
+            });
+
+            if (response.data.success) {
+                toast.success('Available slots fetched successfully!');
+                setSlots(response.data.availableSlots);
+                setInterviewer(response.data.interviewer);
+                setSelectedSlot(null);
+            }
+
+        } catch (error) {
+            toast.error(error.response?.data?.error || "Failed to fetch available slots.");
+            setSlots({});
+            setInterviewer(null);
+        }
+    };
+
+    const handleSlotSelect = (slotStartTime) => {
+        setSelectedSlot(slotStartTime);
+    };
+
+    const ScheduleInterview = async () => {
+        if (!selectedSlot) {
+            toast.info("Please select an available slot first.");
+            return;
+        }
+
+        let selectedSlotData = null;
+        for (const date in slots) {
+            selectedSlotData = slots[date].find(slot => slot.startTime === selectedSlot);
+            if (selectedSlotData) {
+                break;
+            }
+        }
+
+        if (!selectedSlotData) {
+            toast.error("Selected slot data not found. Please try fetching slots again.");
+            return;
+        }
+
+        const { startTime, endTime } = selectedSlotData;
+        const mode = "Whr";
+
+        const data = {
+            interviewer_email: interviewer.email,
+            interviewer_id: interviewer.id,
+            application_id: selectedCandidate.application_id,
+            job_id: selectedCandidate.job_id,
+            candidate_email: selectedCandidate.candidate.applicant_email,
+            candidate_name: selectedCandidate.candidate.applicant_name,
+            candidate_id: selectedCandidate?.candidate?.id || null,
+            startTime: startTime,
+            endTime: endTime,
+            mode: mode,
+        };
+
+        try {
+            const response = await axios.post('/api/calender/book', data);
+            toast.success(response.data.message);
+            setBookingDetails(response.data);
+            setIsScheduled(true); // Show the new screen on success
+        } catch (error) {
+            console.error('Error booking interview:', error.response?.data || error.message);
+            toast.error(error.response?.data?.error || "Failed to book interview.");
+        }
+    };
+
+    const handleShare = async (sendTo) => {
+        if (!bookingDetails) {
+            toast.error("Booking details are missing.");
+            return;
+        }
+
+        try {
+            // Here you would add the logic to send notifications.
+            // This could be another API call to a notification service.
+            console.log(`Sending notification to ${sendTo}...`);
+            toast.success(`Invitation sent to ${sendTo} successfully!`);
+        } catch (error) {
+            toast.error(`Failed to send invitation to ${sendTo}.`);
+        }
+        onClose();
     };
 
     return (
@@ -343,15 +713,18 @@ const SlotModal = ({ onClose }) => {
             <div className="bg-white relative rounded-2xl p-6 max-w-3xl w-full mx-4 animate-slideUp">
                 <button
                     onClick={onClose}
-                    className="absolute top-4 font-bold cursor-pointer  right-6 text-gray-500 hover:text-gray-800"
+                    className="absolute top-4 font-bold cursor-pointer right-6 text-lg text-center text-gray-500 hover:text-gray-800"
                 >
-
                     x
                 </button>
-                <div className="flex flex-col w-full h-fit">
-                    <span className="text-orange-500 mx-auto font-bold mb-4">Schedule Interview With Human Resource</span>
-                    <div className="flex items-center justify-center gap-3">
-                        {/* <Mail className='w-5 h-5 text-gray-400' /> */}
+
+                {/* <div className={`flex transition-transform duration-500 ${isScheduled ? '-translate-x-full' : 'translate-x-0'}`}> */}
+
+                {/* First Screen: Slots Selection */}
+                {/* <div className={`flex-shrink-0 w-full  ${isScheduled == false ? "opacity-100" : "opacity-0 pointer-events-none"} `}> */}
+                {isScheduled == false && <div className="flex flex-col w-full  h-fit">
+                    <span className="text-orange-500 mx-auto font-bold">Schedule Interview With Human Resource</span>
+                    <div className="flex items-center justify-center gap-3 mt-3">
                         <input
                             type="email"
                             name="email"
@@ -361,19 +734,17 @@ const SlotModal = ({ onClose }) => {
                             className="border text-sm text-black border-gray-300 rounded-full px-4 py-0.5 mt-2 w-xs "
                         />
                     </div>
-                    <div className="flex items-center justify-center gap-3 mt-4 mx-auto w-full ">
+                    <div className="flex items-center justify-center gap-3 mt-4 mx-auto w-full">
                         <DatePicker
                             selected={startDate}
                             onChange={(date) => setStartDate(date)}
                             selectsStart
-                            startDate={startDate}
+                            minDate={new Date()}
                             endDate={endDate}
                             placeholderText="From Date"
                             className="w-28 px-4 py-0.5 border border-gray-300 text-sm rounded-full text-black outline-0"
                             dateFormat="MM/dd/yyyy"
                         />
-
-
                         <DatePicker
                             selected={endDate}
                             onChange={(date) => setEndDate(date)}
@@ -385,18 +756,26 @@ const SlotModal = ({ onClose }) => {
                             className="w-28 px-4 py-0.5 border border-gray-300 text-sm rounded-full text-black outline-0"
                             dateFormat="MM/dd/yyyy"
                         />
-
-                        <DatePicker
-                            selected={startTime}
-                            onChange={(time) => setStartTime(time)}
-                            showTimeSelect
-                            showTimeSelectOnly
-                            timeIntervals={30}
-                            timeCaption="Time"
-                            dateFormat="h:mm aa"
-                            placeholderText="Specific Duration"
-                            className="w-24 px-4 py-0.5 border border-gray-300 rounded-full text-sm text-black outline-0"
-                        />
+                        <div className="relative w-36">
+                            <div
+                                onClick={() => durationRef.current?.focus()}
+                                className="w-36 px-4 py-1 border border-gray-300 rounded-full text-sm text-black outline-0 cursor-pointer"
+                            >
+                                {duration ? (duration === 60 ? "1 hour" : `${duration} mins`) : "Select Duration"}
+                            </div>
+                            <select
+                                ref={durationRef}
+                                value={duration || ''}
+                                onChange={(e) => setDuration(Number(e.target.value))}
+                                className="absolute top-0 text-black text-sm left-0 w-full h-full opacity-0 cursor-pointer"
+                            >
+                                <option value="">Select Duration</option>
+                                <option value={15}>15 minutes</option>
+                                <option value={30}>30 minutes</option>
+                                <option value={45}>45 minutes</option>
+                                <option value={60}>1 hour</option>
+                            </select>
+                        </div>
                         <button
                             onClick={handleFetch}
                             className="bg-orange-500 text-white rounded-full px-6 py-0.5 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
@@ -405,66 +784,73 @@ const SlotModal = ({ onClose }) => {
                         </button>
                     </div>
                     <div className="divider w-5/6 mx-auto my-4 bg-gray-400 h-0.5"></div>
-
                     <span className="text-gray-700 text-sm mx-auto mb-4">
-                        Below are the available Slots: Select and sent invitation
+                        Below are the available Slots: Select and send invitation
                     </span>
-                    <ul className="overglow-y-auto max-h-48 space-y-1 px-4">
-                        <li className="flex items-center justify-center gap-1 font-semibold text-sm text-gray-700">
-                            <div className="text-blue-600">
-                                24-08-2025 :
-                            </div>
-                            <div className=" cursor-pointer">
-                                12:15 to  14:15,
-                            </div>
-                            <div className="text-blue-600 cursor-pointer">
-                                15:10 to 15:40
-                            </div>
-
-                        </li>
-                        <li className="flex items-center justify-center gap-1 font-semibold text-sm text-gray-700">
-                            <div className="">
-                                24-08-2025 :
-                            </div>
-                            <div className="">
-                                12:15 to  14:15,
-                            </div>
-                            <div className="">
-                                15:10 to 15:40
-                            </div>
-
-                        </li>
-                        <li className="flex items-center justify-center gap-1 font-semibold text-sm text-gray-700">
-                            <div className="">
-                                24-08-2025 :
-                            </div>
-                            <div className="">
-                                12:15 to  14:15,
-                            </div>
-                            <div className="">
-                                15:10 to 15:40
-                            </div>
-
-                        </li>
+                    <ul className="overflow-y-auto max-h-48 space-y-2 px-4 max-w-8/12 mx-auto py-2">
+                        {Object.entries(slots).length > 0 ? (
+                            Object.entries(slots).map(([date, dailySlots]) => (
+                                <li key={date} className="flex flex-col items-start font-semibold text-sm text-gray-700">
+                                    <div className="text-blue-600 mt-2">
+                                        {date}:
+                                    </div>
+                                    <div className="flex flex-wrap flex-row ">
+                                        {dailySlots.map((slot) => (
+                                            <div
+                                                key={slot.startTime}
+                                                onClick={() => handleSlotSelect(slot.startTime)}
+                                                className={`cursor-pointer min-w-3/12 py-0.5 transition-colors ${selectedSlot === slot.startTime ? 'text-blue-500' : ''}`}
+                                            >
+                                                {slot.time}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </li>
+                            ))
+                        ) : (
+                            <li className="text-center text-gray-500">
+                                No slots available for the selected criteria.
+                            </li>
+                        )}
                     </ul>
-
-                    <div className="flex items-center justify-center w-full gap-8  pt-6">
+                    <div className="flex items-center justify-center w-full gap-8 pt-6">
                         <button
-
+                            onClick={ScheduleInterview}
                             className="bg-orange-500 text-white rounded-full px-6 py-0.5 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
+                        >
+                            Schedule Interview
+                        </button>
+                    </div>
+                </div>
+                }
+                {/* </div> */}
+
+                {/* Second Screen: Share Buttons */}
+                {/* <div className={`flex-shrink-0 w-full flex items-center justify-center ${isScheduled ? "block" : "hidden"} `}> */}
+                {isScheduled && <div className="flex flex-col items-center justify-center w-full h-full p-6">
+                    <h2 className="text-2xl font-bold text-green-600 mb-4 text-center">Interview Scheduled Successfully!</h2>
+                    <p className="text-gray-700 text-sm mb-6 text-center">
+                        You can now send the invitation to the candidate and the hiring resources.
+                    </p>
+                    <div className="flex items-center justify-center w-full gap-8">
+                        <button
+                            onClick={() => handleShare('HR')}
+                            className="bg-orange-400 text-white rounded-full px-6 py-2 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
                         >
                             Send to HR
                         </button>
                         <button
-
-                            className="bg-orange-500 text-white rounded-full px-6 py-0.5 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
+                            onClick={() => handleShare('candidate')}
+                            className="bg-orange-400 text-white rounded-full px-6 py-2 text-sm cursor-pointer hover:bg-orange-600 transition-colors"
                         >
                             Send to Candidate
                         </button>
                     </div>
-                </div>
+                </div>}
+                {/* </div> */}
+                {/* </div> */}
             </div>
-        </div>
+        </div >
     );
 };
 

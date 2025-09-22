@@ -1,14 +1,20 @@
-// app/api/interviews/slots/available/route.js
 import { NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
 import { adminDB } from "@/lib/firebase-admin";
 import { GetCandlenderCLient } from "@/lib/googleCalendar";
 import moment from 'moment-timezone';
 
-// Helper function to generate time slots
-function generateTimeSlots(date, startHour = 9, endHour = 17, duration = 30) {
+// Helper function to generate time slots for a single day
+function generateTimeSlots(date, startHour = 9, endHour = 17, duration) {
     const slots = [];
     const currentDate = moment(date).startOf('day').tz('Asia/Kolkata');
+
+    if (currentDate.day() === 0 || currentDate.day() === 6) {
+        return slots;
+    }
+
+    const now = moment().tz('Asia/Kolkata');
+    const isToday = currentDate.isSame(now, 'day');
 
     for (let hour = startHour; hour < endHour; hour++) {
         for (let minute = 0; minute < 60; minute += duration) {
@@ -16,6 +22,10 @@ function generateTimeSlots(date, startHour = 9, endHour = 17, duration = 30) {
             const endTime = startTime.clone().add(duration, 'minutes');
 
             if (endTime.hour() > endHour || (endTime.hour() === endHour && endTime.minute() > 0)) {
+                continue;
+            }
+
+            if (isToday && startTime.isBefore(now)) {
                 continue;
             }
 
@@ -30,52 +40,148 @@ function generateTimeSlots(date, startHour = 9, endHour = 17, duration = 30) {
     return slots;
 }
 
+// Helper function to get all dates between start and end date
+function getDateRange(startDate, endDate) {
+    const dates = [];
+    const current = moment(startDate).startOf('day');
+    const end = moment(endDate).startOf('day');
+
+    while (current.isSameOrBefore(end)) {
+        dates.push(current.clone());
+        current.add(1, 'day');
+    }
+
+    return dates;
+}
+
+// Helper function to check if slot conflicts with existing bookings
+function isSlotAvailable(slot, busySlots, bookedSlots) {
+    const slotStart = moment(slot.start);
+    const slotEnd = moment(slot.end);
+
+    const googleBusyEvents = busySlots || [];
+    const firebaseBookedInterviews = bookedSlots || [];
+
+    const isGoogleBusy = googleBusyEvents.some(event => {
+        if (!event.start?.dateTime || !event.end?.dateTime) return false;
+
+        const eventStart = moment(event.start.dateTime);
+        const eventEnd = moment(event.end.dateTime);
+
+        return slotStart.isBetween(eventStart, eventEnd, null, '[)') ||
+            slotEnd.isBetween(eventStart, eventEnd, null, '(]') ||
+            (slotStart.isSameOrBefore(eventStart) && slotEnd.isSameOrAfter(eventEnd));
+    });
+
+    const isFirebaseBooked = firebaseBookedInterviews.some(booked => {
+        // Correctly handle Firestore Timestamps by converting them to moment objects
+        const bookedStart = moment(booked.started_at.toDate());
+        const bookedEnd = moment(booked.ended_at.toDate());
+        const bookedDate = moment(booked.scheduled_at.toDate());
+
+        // Check for time overlap
+        const hasTimeOverlap =
+            slotStart.isBetween(bookedStart, bookedEnd, null, '[)') ||
+            slotEnd.isBetween(bookedStart, bookedEnd, null, '(]') ||
+            (slotStart.isSameOrBefore(bookedStart) && slotEnd.isSameOrAfter(bookedEnd));
+
+        // Check if the slot and the booked interview are on the same day
+        const isSameDay = slotStart.isSame(bookedDate, 'day');
+
+        return isSameDay && hasTimeOverlap;
+    });
+
+    return !isGoogleBusy && !isFirebaseBooked;
+}
+
 export async function POST(request) {
     try {
-        // Authentication check
+
         const session = await request.cookies.get("session")?.value;
+
         if (!session) {
+
             return NextResponse.json({ error: "No session found" }, { status: 400 });
+
         }
+
+
 
         let decodedUser;
+
         try {
+
             const decodedToken = await getAuth().verifySessionCookie(session, true);
+
             const userDoc = await adminDB.collection("users").doc(decodedToken.uid).get();
 
+
+
             if (!userDoc.exists) {
+
                 return NextResponse.json({ error: "User not found" }, { status: 404 });
+
             }
 
+
+
             decodedUser = { uid: decodedToken.uid, ...userDoc.data() };
+
         } catch (err) {
+
             console.error("Auth error:", err);
+
             return NextResponse.json({ error: "Invalid token" }, { status: 403 });
+
         }
 
-        const validRoles = ["Admin", "HHR", "HR", "HM", "recruiter"];
+
+
+        const validRoles = ["Admin", "HHR", "recruiter"];
+
         if (!validRoles.includes(decodedUser.role)) {
+
             return NextResponse.json({ error: "User role is not valid" }, { status: 403 });
+
         }
 
         const body = await request.json();
         const {
             interviewer_email,
-            date,
-            duration_minutes = 30,
-            type
+            startDate,
+            endDate,
+            duration,
+            selectedOption
         } = body;
 
-        if (!interviewer_email || !date) {
+        if (!interviewer_email || !startDate || !endDate) {
             return NextResponse.json({
-                error: "Missing required fields: interviewer_email and date"
+                error: "Missing required fields: interviewer_email, startDate, and endDate"
             }, { status: 400 });
         }
 
-        // Determine interviewer role based on type
-        const expectedRole = type === "Whm" ? "HM" : "HR";
+        const start = moment(startDate);
+        const end = moment(endDate);
 
-        // Get interviewer from Firebase
+        if (!start.isValid() || !end.isValid()) {
+            return NextResponse.json({
+                error: "Invalid date format. Please use ISO date format."
+            }, { status: 400 });
+        }
+
+        if (end.isBefore(start)) {
+            return NextResponse.json({
+                error: "End date cannot be before start date"
+            }, { status: 400 });
+        }
+
+        if (end.diff(start, 'days') > 30) {
+            return NextResponse.json({
+                error: "Date range cannot exceed 30 days"
+            }, { status: 400 });
+        }
+
+        const expectedRole = selectedOption === "Whm" ? "HM" : "HR";
         const interviewerSnapshot = await adminDB.collection("users")
             .where("email", "==", interviewer_email)
             .where("role", "==", expectedRole)
@@ -84,105 +190,92 @@ export async function POST(request) {
 
         if (interviewerSnapshot.empty) {
             return NextResponse.json({
-                error: `${type === "Whm" ? "Hiring Manager" : "HR"} not found with email: ${interviewer_email}`
+                error: `${selectedOption === "Whm" ? "Hiring Manager" : "HR"} not found with email: ${interviewer_email}`
             }, { status: 404 });
         }
 
         const interviewerData = interviewerSnapshot.docs[0].data();
         const interviewerId = interviewerSnapshot.docs[0].id;
-
-        // Get Google Calendar client
         const calendar = await GetCandlenderCLient();
-
-        // Generate all possible slots for the day
-        const allSlots = generateTimeSlots(date, 9, 17, duration_minutes);
-
-        // Get busy times from Google Calendar
-        const startTime = moment(date).startOf('day').tz('Asia/Kolkata').toISOString();
-        const endTime = moment(date).endOf('day').tz('Asia/Kolkata').toISOString();
+        const dateRange = getDateRange(startDate, endDate);
+        const availableSlotsByDate = {};
+        let totalAvailableSlots = 0;
 
         try {
-            // Use the shared calendar ID from your configuration
             const calendarId = "b572b11b331778a1264c46b2d1d5becd3f11352fa6742914aaffdaa2a4f85b56@group.calendar.google.com";
+            const fieldName = selectedOption === "Whm" ? "hm_id" : "hr_id";
 
-            // Get all events for the day
-            const eventsResponse = await calendar.events.list({
-                calendarId: calendarId,
-                timeMin: startTime,
-                timeMax: endTime,
-                singleEvents: true,
-                orderBy: 'startTime'
-            });
-
-            const busySlots = eventsResponse.data.items || [];
-
-            // Get booked interviews from Firebase for this interviewer
-            const interviewsQuery = adminDB.collection("interviews")
-                .where("interview_date", "==", date)
-                .where("status", "in", ["scheduled", "confirmed"]);
-
-            // Add interviewer filter based on type
-            const fieldName = type === "Whm" ? "hm_id" : "hr_id";
-            const bookedInterviews = await interviewsQuery
+            const interviewsQuerySnapshot = await adminDB.collection("interviews")
+                // Use a query filter that Firebase can index and understand
                 .where(fieldName, "==", interviewerId)
+                .where("status", "in", ["scheduled", "confirmed"])
                 .get();
 
-            const firebaseBookedSlots = bookedInterviews.docs.map(doc => ({
-                start: doc.data().start_time,
-                end: doc.data().end_time
-            }));
-
-            // Filter available slots
-            const availableSlots = allSlots.filter(slot => {
-                const slotStart = moment(slot.start);
-                const slotEnd = moment(slot.end);
-
-                // Check against Google Calendar events
-                const isGoogleBusy = busySlots.some(event => {
-                    if (!event.start?.dateTime || !event.end?.dateTime) return false;
-
-                    const eventStart = moment(event.start.dateTime);
-                    const eventEnd = moment(event.end.dateTime);
-
-                    return slotStart.isBetween(eventStart, eventEnd, null, '[)') ||
-                        slotEnd.isBetween(eventStart, eventEnd, null, '(]') ||
-                        (slotStart.isSameOrBefore(eventStart) && slotEnd.isSameOrAfter(eventEnd));
-                });
-
-                // Check against Firebase booked slots
-                const isFirebaseBooked = firebaseBookedSlots.some(booked => {
-                    const bookedStart = moment(booked.start);
-                    const bookedEnd = moment(booked.end);
-
-                    return slotStart.isBetween(bookedStart, bookedEnd, null, '[)') ||
-                        slotEnd.isBetween(bookedStart, bookedEnd, null, '(]') ||
-                        (slotStart.isSameOrBefore(bookedStart) && slotEnd.isSameOrAfter(bookedEnd));
-                });
-
-                return !isGoogleBusy && !isFirebaseBooked;
+            const firebaseBookedSlots = interviewsQuerySnapshot.empty ? [] : interviewsQuerySnapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    started_at: data.started_at,
+                    ended_at: data.ended_at,
+                    scheduled_at: data.scheduled_at
+                };
             });
 
-            // Format response
-            const formattedSlots = {};
-            const dateKey = moment(date).format('DD-MM-YYYY');
-            formattedSlots[dateKey] = availableSlots.map(slot => ({
-                time: slot.display,
-                startTime: slot.start,
-                endTime: slot.end,
-                available: true
-            }));
+            for (const currentDate of dateRange) {
+                const dateString = currentDate.format('YYYY-MM-DD');
+                const displayDateString = currentDate.format('DD-MM-YYYY');
+                const allSlots = generateTimeSlots(dateString, 9, 17, duration);
 
-            return NextResponse.json({
+                if (allSlots.length === 0) {
+                    continue;
+                }
+
+                const dayStart = currentDate.startOf('day').tz('Asia/Kolkata').toISOString();
+                const dayEnd = currentDate.endOf('day').tz('Asia/Kolkata').toISOString();
+
+                const eventsResponse = await calendar.events.list({
+                    calendarId: calendarId,
+                    timeMin: dayStart,
+                    timeMax: dayEnd,
+                    singleEvents: true,
+                    orderBy: 'startTime'
+                });
+
+                const busySlots = eventsResponse.data.items || [];
+
+                const dayBookedSlots = firebaseBookedSlots.filter(slot =>
+                    // Correctly handle the timestamp object
+                    moment(slot.scheduled_at.toDate()).isSame(currentDate, 'day')
+                );
+
+                const availableSlots = allSlots.filter(slot =>
+                    isSlotAvailable(slot, busySlots, dayBookedSlots)
+                );
+
+                if (availableSlots.length > 0) {
+                    availableSlotsByDate[displayDateString] = availableSlots.map(slot => ({
+                        time: slot.display,
+                        startTime: slot.start,
+                        endTime: slot.end,
+                        available: true
+                    }));
+                    totalAvailableSlots += availableSlots.length;
+                }
+            }
+
+            const formattedResponse = {
                 success: true,
-                interviewer_email,
-                interviewer_id: interviewerId,
-                interviewer_role: expectedRole,
-                type,
-                date,
-                slots: formattedSlots,
-                totalAvailable: availableSlots.length,
-                requested_by: decodedUser.email
-            }, { status: 200 });
+                interviewer: {
+                    email: interviewer_email,
+                    id: interviewerId,
+                    name: interviewerData.name || interviewerData.displayName,
+                    role: expectedRole
+                },
+                availableSlots: availableSlotsByDate,
+            };
+
+
+
+            return NextResponse.json(formattedResponse, { status: 200 });
 
         } catch (calendarError) {
             console.error("Google Calendar error:", calendarError);

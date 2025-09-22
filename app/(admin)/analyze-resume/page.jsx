@@ -183,9 +183,9 @@ const page = () => {
     const currentStage = getStage(percentage);
 
     useEffect(() => {
-        toast.success("Welcome to dashboard", { position: "top-right", autoClose: 2000 });
-        toast("Welcome to dashboard")
-        toast("Welcome to dashboard")
+        // toast.success("Welcome to dashboard", { position: "top-right", autoClose: 2000 });
+        // toast("Welcome to dashboard")
+        // toast("Welcome to dashboard")
         getallJobDescription();
     }, []);
 
